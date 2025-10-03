@@ -98,6 +98,11 @@ app.use('/auth', authRoutes)
 app.use('/tasks', taskRoutes)
 app.use('/admin', adminRoutes)
 
+// Additional aliases under /api (no version) for extra compatibility
+app.use('/api/auth', authRoutes)
+app.use('/api/tasks', taskRoutes)
+app.use('/api/admin', adminRoutes)
+
 // Swagger documentation
 swaggerDocs(app)
 

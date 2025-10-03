@@ -5,13 +5,34 @@ let redisClient
 
 const connectRedis = async () => {
   try {
-    redisClient = redis.createClient({
-      socket: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: process.env.REDIS_PORT || 6379
-      },
-      password: process.env.REDIS_PASSWORD || undefined
-    })
+    // Allow disabling Redis via env (e.g., on platforms without Redis or during incidents)
+    const enabled = (process.env.REDIS_ENABLED || 'true').toLowerCase() === 'true'
+    if (!enabled) {
+      logger.info('Redis disabled via REDIS_ENABLED=false; skipping connection')
+      return null
+    }
+
+    const useUrl = process.env.REDIS_URL
+    const tlsEnabled =
+      (process.env.REDIS_TLS || '').toLowerCase() === 'true' ||
+      (useUrl ? useUrl.startsWith('rediss://') : false)
+
+    const options = useUrl
+      ? {
+          url: useUrl,
+          socket: { tls: tlsEnabled }
+        }
+      : {
+          username: process.env.REDIS_USERNAME || undefined,
+          password: process.env.REDIS_PASSWORD || undefined,
+          socket: {
+            host: process.env.REDIS_HOST || 'localhost',
+            port: Number(process.env.REDIS_PORT || 6379),
+            tls: tlsEnabled
+          }
+        }
+
+    redisClient = redis.createClient(options)
 
     redisClient.on('error', err => {
       logger.error('Redis Client Error:', err)
@@ -21,13 +42,24 @@ const connectRedis = async () => {
       logger.info('Redis client connected')
     })
 
+    // Log selected connection method (hide secrets)
+    if (useUrl) {
+      const safeUrl = useUrl.replace(/:\w+@/, '://****@')
+      logger.info(`Connecting to Redis via URL (TLS=${tlsEnabled}) -> ${safeUrl}`)
+    } else {
+      logger.info(
+        `Connecting to Redis host ${options.socket.host}:${options.socket.port} (TLS=${tlsEnabled})`
+      )
+    }
+
     // Automatic reconnect strategy
     redisClient.on('end', () => logger.warn('Redis client disconnected'))
     await redisClient.connect()
     return redisClient
   } catch (error) {
     logger.error('Redis connection error:', error)
-    throw error
+    // Do not crash the app; allow running without Redis
+    return null
   }
 }
 

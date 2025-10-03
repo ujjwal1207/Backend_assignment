@@ -8,21 +8,32 @@ const PORT = process.env.PORT || 5000
 // Connect to database and Redis
 const startServer = async () => {
   try {
-    // Connect to MongoDB Atlas
+    // Connect to MongoDB Atlas first
     await connectDB()
     logger.info('✅ MongoDB Atlas connected successfully')
 
-    // Connect to Redis
-    await connectRedis()
-    logger.info('✅ Redis connected successfully')
-
-    // Start server
+    // Start server immediately after DB is ready
     const server = app.listen(PORT, () => {
       const baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`
       logger.info(`🚀 Server running on ${baseUrl}`)
       logger.info(`📚 API Docs: ${baseUrl}/api-docs`)
       logger.info(`🌍 Environment: ${process.env.NODE_ENV}`)
     })
+
+    // Connect to Redis in background (non-blocking)
+    ;(async () => {
+      const redisEnabled = (process.env.REDIS_ENABLED || 'true').toLowerCase() === 'true'
+      if (!redisEnabled) {
+        logger.info('ℹ️ Redis disabled via REDIS_ENABLED=false')
+        return
+      }
+      const client = await connectRedis()
+      if (client) {
+        logger.info('✅ Redis connected successfully')
+      } else {
+        logger.warn('⚠️ Redis not connected; continuing without cache')
+      }
+    })().catch(err => logger.error('Redis async connect error:', err))
 
     // Graceful shutdown
     process.on('SIGTERM', () => {

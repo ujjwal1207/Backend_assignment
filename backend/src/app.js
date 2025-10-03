@@ -74,6 +74,8 @@ const limiter = rateLimit({
   legacyHeaders: false
 })
 app.use('/api/', limiter)
+// Apply rate limiting to legacy, unversioned aliases as well
+app.use(['/auth', '/tasks', '/admin'], limiter)
 
 // Health check
 app.get('/health', (req, res) => {
@@ -89,6 +91,12 @@ const API_VERSION = process.env.API_VERSION || 'v1'
 app.use(`/api/${API_VERSION}/auth`, authRoutes)
 app.use(`/api/${API_VERSION}/tasks`, taskRoutes)
 app.use(`/api/${API_VERSION}/admin`, adminRoutes)
+
+// Backward-compatible aliases for clients still calling unversioned paths
+// These can be removed after frontend is updated to use /api/v1 prefix
+app.use('/auth', authRoutes)
+app.use('/tasks', taskRoutes)
+app.use('/admin', adminRoutes)
 
 // Swagger documentation
 swaggerDocs(app)
